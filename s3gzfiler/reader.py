@@ -24,6 +24,9 @@ class FileContentReader:
                 Bucket=self.bucket_name,
                 Prefix=self.folder_name + FileContentReader._get_common_timeslice(self.start_datetime, self.end_datetime)
             )
+            if 'Contents' not in response:
+                # Do nothing.
+                return
             keys = [content['Key'] for content in response['Contents']]
             sorted_keys = sorted(keys, key=FileContentReader._get_keys_for_sorting, reverse=False)
             for each_key in sorted_keys:
@@ -34,8 +37,8 @@ class FileContentReader:
                 for each_obj in json_obj:
                     if each_obj.get("log") is not None:
                         print(each_obj["log"])
-        except Exception:
-            pass
+        except Exception as e:
+            raise e
 
     def extract_gz_object(self, key):
         obj = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)

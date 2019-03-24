@@ -18,26 +18,24 @@ class FileContentReader:
         self.start_datetime = _start
         self.end_datetime = _end
 
-    def read(self):
-        result = []
+    def dump_to_stdout(self):
         try:
             response = self.s3_client.list_objects(
                 Bucket=self.bucket_name,
-                Prefix=self.folder_name + self._get_common_timeslice(self.start_datetime, self.end_datetime)
+                Prefix=self.folder_name + FileContentReader._get_common_timeslice(self.start_datetime, self.end_datetime)
             )
             keys = [content['Key'] for content in response['Contents']]
-            sorted_keys = sorted(keys, key=self._get_keys_for_sorting, reverse=False)
-            for k in sorted_keys:
-                content = self.extract_gz_object(k)
-                lines = content.split('\n')
-                for line in lines:
-                    if len(line.strip()) == 0:
-                        continue
-                    json_obj = json.loads(line)
-                    result.append(json_obj["log"])
+            sorted_keys = sorted(keys, key=FileContentReader._get_keys_for_sorting, reverse=False)
+            for each_key in sorted_keys:
+                file_content = self.extract_gz_object(each_key)
+                lines_in_file = [l for l in file_content.split('\n') if 0 < len(l.strip())]
+                json_string = "[" + ",".join(lines_in_file) + "]"
+                json_obj = json.loads(json_string)
+                for each_obj in json_obj:
+                    if each_obj.get("log") is not None:
+                        print(each_obj["log"])
         except Exception:
             pass
-        return result
 
     def extract_gz_object(self, key):
         obj = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
@@ -46,13 +44,17 @@ class FileContentReader:
         content = gzipped_content.read()
         return content.decode('utf-8')
 
-    def _get_common_timeslice(self, start, end):
+    @staticmethod
+    def _get_common_timeslice(start, end):
         def get_year_part(s):
             return s[:4]
+
         def get_month_part(s):
             return s[4:6]
+
         def get_day_part(s):
             return s[6:8]
+
         def get_hour_part(s):
             return s[8:10]
 
@@ -70,7 +72,8 @@ class FileContentReader:
             return result
         return result + "{}/".format(get_hour_part(start))
 
-    def _get_keys_for_sorting(self, object_key):
+    @staticmethod
+    def _get_keys_for_sorting(object_key):
         object_name_parts = object_key.split('/')
         local_name_part = object_name_parts[-1]
 
@@ -122,6 +125,4 @@ start_datetime = _ask_datetime("START datetime? (YYYYMMDDHHmmSS)")
 end_datetime = _ask_datetime("END datetime? (YYYYMMDDHHmmSS)")
 
 reader = FileContentReader(client, configs[KEY_BUCKET_NAME], folder_name, start_datetime, end_datetime)
-lines = reader.read()
-for each in lines:
-    print(each)
+reader.dump_to_stdout()

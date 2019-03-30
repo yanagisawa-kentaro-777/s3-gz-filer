@@ -1,3 +1,4 @@
+import sys
 import boto3
 import gzip
 import json
@@ -18,17 +19,20 @@ class FileContentReader:
         self.start_datetime = _start
         self.end_datetime = _end
 
-    def dump_to_stdout(self):
+    def dump_to_dest(self, dest=sys.stdout):
         try:
+            prefix = self.folder_name + FileContentReader._get_common_timeslice(self.start_datetime, self.end_datetime)
+            # sys.stderr.write(prefix + "\n")
             response = self.s3_client.list_objects(
                 Bucket=self.bucket_name,
-                Prefix=self.folder_name + FileContentReader._get_common_timeslice(self.start_datetime, self.end_datetime)
+                Prefix=prefix
             )
             if 'Contents' not in response:
                 # Do nothing.
                 return
             keys = [content['Key'] for content in response['Contents']]
             sorted_keys = sorted(keys, key=FileContentReader._get_keys_for_sorting, reverse=False)
+            line_count = 0
             for each_key in sorted_keys:
                 file_content = self.extract_gz_object(each_key)
                 lines_in_file = [l for l in file_content.split('\n') if 0 < len(l.strip())]
@@ -36,7 +40,12 @@ class FileContentReader:
                 json_obj = json.loads(json_string)
                 for each_obj in json_obj:
                     if each_obj.get("log") is not None:
-                        print(each_obj["log"])
+                        line_count += 1
+                        dest.write(each_obj["log"])
+                        dest.write("\n")
+                        if line_count % 1000 == 0:
+                            sys.stderr.write(str(line_count) + " " + each_key + "\n")
+                        # print(each_obj["log"])
         except Exception as e:
             raise e
 
@@ -101,7 +110,7 @@ def _load_configs(path):
 def _ask_non_empty_string(guide):
     result = ""
     while len(result) == 0:
-        print(guide)
+        sys.stderr.write(guide + "\n")
         result = input().strip()
     return result
 
@@ -112,10 +121,23 @@ def _ask_datetime(guide):
 
     result = ""
     while not is_well_format_datetime(result):
-        print(guide)
+        sys.stderr.write(guide + "\n")
         result = input().strip()
     return result
 
+
+def _ask_hour(guide):
+    def is_well_format_target(s):
+        return s is not None and len(s) == 10 and s.isdigit()
+
+    result = ""
+    while not is_well_format_target(result):
+        sys.stderr.write(guide + "\n")
+        result = input().strip()
+    return result
+
+
+# TODO Read arguments!
 
 configs = _load_configs('./.env')
 client = boto3.client(service_name="s3",
@@ -124,8 +146,16 @@ client = boto3.client(service_name="s3",
                       aws_secret_access_key=configs[KEY_SECRET_KEY])
 
 folder_name = _ask_non_empty_string("Folder name?")
-start_datetime = _ask_datetime("START datetime? (YYYYMMDDHHmmSS)")
-end_datetime = _ask_datetime("END datetime? (YYYYMMDDHHmmSS)")
+target_hour = _ask_hour("TARGET HOUR? (YYYYMMDDHH)")
+start_datetime = target_hour + "0000"
+end_datetime = target_hour + "5959"
+# start_datetime = _ask_datetime("START datetime? (YYYYMMDDHHmmSS)")
+# end_datetime = _ask_datetime("END datetime? (YYYYMMDDHHmmSS)")
+
+dest_file_name = folder_name + "_" + target_hour + ".log"
+dest_file = open(dest_file_name, "w")
 
 reader = FileContentReader(client, configs[KEY_BUCKET_NAME], folder_name, start_datetime, end_datetime)
-reader.dump_to_stdout()
+reader.dump_to_dest(dest_file)
+
+dest_file.close()

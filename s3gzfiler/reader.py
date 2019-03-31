@@ -139,6 +139,14 @@ def _ask_hour(guide):
 
 # TODO Read arguments!
 
+def get_next(s):
+    from datetime import datetime, timedelta
+
+    dt = datetime.strptime(s, '%Y%m%d%H')
+    dt = dt + timedelta(hours=1)
+    return dt.strftime('%Y%m%d%H')
+
+
 configs = _load_configs('./.env')
 client = boto3.client(service_name="s3",
                       region_name=configs[KEY_S3_REGION],
@@ -146,16 +154,22 @@ client = boto3.client(service_name="s3",
                       aws_secret_access_key=configs[KEY_SECRET_KEY])
 
 folder_name = _ask_non_empty_string("Folder name?")
-target_hour = _ask_hour("TARGET HOUR? (YYYYMMDDHH)")
-start_datetime = target_hour + "0000"
-end_datetime = target_hour + "5959"
-# start_datetime = _ask_datetime("START datetime? (YYYYMMDDHHmmSS)")
-# end_datetime = _ask_datetime("END datetime? (YYYYMMDDHHmmSS)")
+start_hour = _ask_hour("START HOUR? (YYYYMMDDHH)")
+end_hour = _ask_hour("END HOUR? (YYYYMMDDHH)")
 
-dest_file_name = folder_name + "_" + target_hour + ".log"
-dest_file = open(dest_file_name, "w")
+target_hour = start_hour
+while target_hour <= end_hour:
+    sys.stderr.write(target_hour + "\n")
 
-reader = FileContentReader(client, configs[KEY_BUCKET_NAME], folder_name, start_datetime, end_datetime)
-reader.dump_to_dest(dest_file)
+    start_datetime = target_hour + "0000"
+    end_datetime = target_hour + "5959"
 
-dest_file.close()
+    dest_file_name = folder_name + "_" + target_hour + ".log"
+    dest_file = open(dest_file_name, "w")
+
+    reader = FileContentReader(client, configs[KEY_BUCKET_NAME], folder_name, start_datetime, end_datetime)
+    reader.dump_to_dest(dest_file)
+    dest_file.close()
+
+    target_hour = get_next(target_hour)
+

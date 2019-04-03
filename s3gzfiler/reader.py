@@ -153,9 +153,10 @@ client = boto3.client(service_name="s3",
                       aws_access_key_id=configs[KEY_ACCESS_KEY_ID],
                       aws_secret_access_key=configs[KEY_SECRET_KEY])
 
-folder_name = _ask_non_empty_string("Folder name?")
+folder_name = _ask_non_empty_string("S3 Folder name?")
 start_hour = _ask_hour("START HOUR? (YYYYMMDDHH)")
 end_hour = _ask_hour("END HOUR? (YYYYMMDDHH)")
+dest_dir = _ask_non_empty_string("Local dest dir name?")
 
 target_hour = start_hour
 while target_hour <= end_hour:
@@ -164,7 +165,7 @@ while target_hour <= end_hour:
     start_datetime = target_hour + "0000"
     end_datetime = target_hour + "5959"
 
-    dest_file_name = folder_name + "_" + target_hour + ".log"
+    dest_file_name = dest_dir + "/" + folder_name + "_" + target_hour + ".log"
     dest_file = open(dest_file_name, "w")
 
     reader = FileContentReader(client, configs[KEY_BUCKET_NAME], folder_name, start_datetime, end_datetime)
